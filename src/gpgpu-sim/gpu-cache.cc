@@ -1026,8 +1026,17 @@ void baseline_cache::bandwidth_management::use_data_port(
 
 /// use the fill port
 void baseline_cache::bandwidth_management::use_fill_port(mem_fetch *mf) {
+  // TODO: is this assumption still valid?
   // assume filling the entire line with the returned request
-  unsigned fill_cycles = m_config.get_atom_sz() / m_config.m_data_port_width;
+
+  // two unsigned ints, rounding their quotient to the ceiling is (x/y)+(x%y!=0)
+  // many CPUs set a flag that indicates whether there was a remainder, so
+  // the added overhead is low
+  unsigned _get_atom_sz = m_config.get_atom_sz();
+  unsigned _data_port_width = m_config.m_data_port_width;
+  unsigned fill_cycles = 
+      (_get_atom_sz / _data_port_width)
+      + (_get_atom_sz % _data_port_width != 0);
   m_fill_port_occupied_cycles += fill_cycles;
 }
 
