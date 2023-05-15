@@ -53,7 +53,7 @@ else
 	CXXFLAGS += 
 endif
 
-CXXFLAGS += -I$(CUDA_INSTALL_PATH)/include
+CXXFLAGS += -I$(CUDA_INSTALL_PATH)/include -I../../external/boost_1_80_0
 
 POWER_FLAGS=
 ifneq ($(GPGPUSIM_POWER_MODEL),)
