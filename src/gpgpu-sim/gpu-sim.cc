@@ -610,13 +610,15 @@ void shader_core_config::reg_options(class OptionParser *opp) {
       "1");
   option_parser_register(
       opp, "-gpgpu_scheduler", OPT_CSTR, &gpgpu_scheduler_string,
-      "Scheduler configuration: < lrr | gto | two_level_active > "
+      "Scheduler configuration: < lrr | gto | two_level_active | exp_single_warp > "
       "If "
       "two_level_active:<num_active_warps>:<inner_prioritization>:<outer_"
       "prioritization>"
       "For complete list of prioritization values see shader.h enum "
       "scheduler_prioritization_type"
-      "Default: gto",
+      "Default: gto."
+      "If exp_single_warp, a warp must finish before another warp can begin - "
+      "this is experimental and may cause deadlock.",
       "gto");
 
   option_parser_register(

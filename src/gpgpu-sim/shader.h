@@ -363,6 +363,9 @@ enum concrete_scheduler {
   CONCRETE_SCHEDULER_RRR,
   CONCRETE_SCHEDULER_WARP_LIMITING,
   CONCRETE_SCHEDULER_OLDEST_FIRST,
+  // Experiemental scheduler: one warp must finish before another warp can
+  // start. May cause deadlock if barriers are present.  
+  EXP_CONCRETE_SCHEDULER_SINGLE_WARP_ACTIVE,
   NUM_CONCRETE_SCHEDULERS
 };
 
@@ -567,10 +570,12 @@ class two_level_active_scheduler : public scheduler_unit {
                              register_set *sfu_out, register_set *int_out,
                              register_set *tensor_core_out,
                              std::vector<register_set *> &spec_cores_out,
-                             register_set *mem_out, int id, char *config_str)
+                             register_set *mem_out, int id, 
+                             const char *config_str, bool _allow_demotion)
       : scheduler_unit(stats, shader, scoreboard, simt, warp, sp_out, dp_out,
                        sfu_out, int_out, tensor_core_out, spec_cores_out,
                        mem_out, id),
+        allow_demotion(_allow_demotion),
         m_pending_warps() {
     unsigned inner_level_readin;
     unsigned outer_level_readin;
@@ -602,6 +607,10 @@ class two_level_active_scheduler : public scheduler_unit {
       const std::vector<shd_warp_t *>::const_iterator &prioritized_iter);
 
  private:
+  // Active warps waiting on long latency operations may be demoted from
+  // m_next_cycle_prioritized_warps and be swapped with an inactive warp (see
+  // two_level_active_scheduler::order_warps). 
+  const bool allow_demotion;
   std::deque<shd_warp_t *> m_pending_warps;
   scheduler_prioritization_type m_inner_level_prioritization;
   scheduler_prioritization_type m_outer_level_prioritization;

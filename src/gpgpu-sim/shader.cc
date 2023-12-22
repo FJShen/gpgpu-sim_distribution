@@ -191,16 +191,18 @@ void shader_core_ctx::create_schedulers() {
           ? CONCRETE_SCHEDULER_LRR
           : sched_config.find("two_level_active") != std::string::npos
                 ? CONCRETE_SCHEDULER_TWO_LEVEL_ACTIVE
-                : sched_config.find("gto") != std::string::npos
-                      ? CONCRETE_SCHEDULER_GTO
-                      : sched_config.find("rrr") != std::string::npos
-                            ? CONCRETE_SCHEDULER_RRR
-                      : sched_config.find("old") != std::string::npos
-                            ? CONCRETE_SCHEDULER_OLDEST_FIRST
-                            : sched_config.find("warp_limiting") !=
-                                      std::string::npos
-                                  ? CONCRETE_SCHEDULER_WARP_LIMITING
-                                  : NUM_CONCRETE_SCHEDULERS;
+                : sched_config.find("exp_single_warp") != std::string::npos
+                  ? EXP_CONCRETE_SCHEDULER_SINGLE_WARP_ACTIVE
+                  : sched_config.find("gto") != std::string::npos
+                        ? CONCRETE_SCHEDULER_GTO
+                        : sched_config.find("rrr") != std::string::npos
+                              ? CONCRETE_SCHEDULER_RRR
+                        : sched_config.find("old") != std::string::npos
+                              ? CONCRETE_SCHEDULER_OLDEST_FIRST
+                              : sched_config.find("warp_limiting") !=
+                                        std::string::npos
+                                    ? CONCRETE_SCHEDULER_WARP_LIMITING
+                                    : NUM_CONCRETE_SCHEDULERS;
   assert(scheduler != NUM_CONCRETE_SCHEDULERS);
 
   for (unsigned i = 0; i < m_config->gpgpu_num_sched_per_core; i++) {
@@ -219,7 +221,17 @@ void shader_core_ctx::create_schedulers() {
             &m_pipeline_reg[ID_OC_SP], &m_pipeline_reg[ID_OC_DP],
             &m_pipeline_reg[ID_OC_SFU], &m_pipeline_reg[ID_OC_INT],
             &m_pipeline_reg[ID_OC_TENSOR_CORE], m_specilized_dispatch_reg,
-            &m_pipeline_reg[ID_OC_MEM], i, m_config->gpgpu_scheduler_string));
+            &m_pipeline_reg[ID_OC_MEM], i, m_config->gpgpu_scheduler_string, 
+            true));
+        break;
+      case EXP_CONCRETE_SCHEDULER_SINGLE_WARP_ACTIVE:
+        schedulers.push_back(new two_level_active_scheduler(
+            m_stats, this, m_scoreboard, m_simt_stack, &m_warp,
+            &m_pipeline_reg[ID_OC_SP], &m_pipeline_reg[ID_OC_DP],
+            &m_pipeline_reg[ID_OC_SFU], &m_pipeline_reg[ID_OC_INT],
+            &m_pipeline_reg[ID_OC_TENSOR_CORE], m_specilized_dispatch_reg,
+            &m_pipeline_reg[ID_OC_MEM], i, "two_level_active:1:0:1", 
+            false));
         break;
       case CONCRETE_SCHEDULER_GTO:
         schedulers.push_back(new gto_scheduler(
@@ -1627,7 +1639,7 @@ void two_level_active_scheduler::order_warps() {
       }
     }
 
-    if (waiting) {
+    if (allow_demotion && waiting) {
       m_pending_warps.push_back(*iter);
       iter = m_next_cycle_prioritized_warps.erase(iter);
       SCHED_DPRINTF("DEMOTED warp_id=%d, dynamic_warp_id=%d\n",
