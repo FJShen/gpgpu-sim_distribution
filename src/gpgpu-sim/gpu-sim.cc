@@ -2223,12 +2223,12 @@ float gpgpu_sim::get_cov()
   return coefficient_of_variation;
 }
 
-bool gpgpu_sim::pka_stable(unsigned int total_ctas)
+bool gpgpu_sim::pka_stable(unsigned int total_ctas, unsigned full_wave_in_cta)
 {
   float coefficient_of_variation = get_cov();
   if (((100.0 * coefficient_of_variation) < PKA_THRESHOLD) && 
        (gpu_sim_cycle > 5000) && 
-      ((m_shader_stats->ctas_completed > 32) || (total_ctas < 32)))
+       (m_shader_stats->ctas_completed >= full_wave_in_cta))
         return true;
   return false;
 }

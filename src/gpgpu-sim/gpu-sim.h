@@ -582,7 +582,7 @@ class gpgpu_sim : public gpgpu_t {
   float variance(float *r, int n, float mu);
   float std_dev(float *r, int n, float mu);
   float get_cov();
-  bool pka_stable(unsigned int total_ctas);
+  bool pka_stable(unsigned int total_ctas, unsigned how_many_cta_in_a_wave);
   
 
   // The next three functions added to be used by the functional simulation
