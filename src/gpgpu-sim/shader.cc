@@ -1269,8 +1269,9 @@ void scheduler_unit::cycle() {
     if ((*iter) == NULL || (*iter)->done_exit()) {
       continue;
     }
-    SCHED_DPRINTF("Testing (warp_id %u, dynamic_warp_id %u)\n",
-                  (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id());
+    SCHED_DPRINTF("Testing (warp_id %u, dynamic_warp_id %u, cta_id %u)\n",
+                  (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(), 
+                  (*iter)->get_cta_id());
     unsigned warp_id = (*iter)->get_warp_id();
     unsigned checked = 0;
     unsigned issued = 0;
@@ -1285,14 +1286,16 @@ void scheduler_unit::cycle() {
 
     if (warp(warp_id).ibuffer_empty())
       SCHED_DPRINTF(
-          "Warp (warp_id %u, dynamic_warp_id %u) fails as ibuffer_empty\n",
-          (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id());
+          "Warp (warp_id %u, dynamic_warp_id %u, cta_id %u) fails as ibuffer_empty\n",
+          (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
+          (*iter)->get_cta_id());
 
     if (warp(warp_id).waiting())
       SCHED_DPRINTF(
-          "Warp (warp_id %u, dynamic_warp_id %u) fails as waiting for "
+          "Warp (warp_id %u, dynamic_warp_id %u, cta_id %u) fails as waiting for "
           "barrier\n",
-          (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id());
+          (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
+          (*iter)->get_cta_id());
 
     while (!warp(warp_id).waiting() && !warp(warp_id).ibuffer_empty() &&
            (checked < max_issue) && (checked <= issued) &&
@@ -1310,17 +1313,19 @@ void scheduler_unit::cycle() {
       unsigned pc, rpc;
       m_shader->get_pdom_stack_top_info(warp_id, pI, &pc, &rpc);
       SCHED_DPRINTF(
-          "Warp (warp_id %u, dynamic_warp_id %u) has valid instruction (%s)\n",
+          "Warp (warp_id %u, dynamic_warp_id %u, cta_id %u) has valid instruction (%s)\n",
           (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
+          (*iter)->get_cta_id(),
           m_shader->m_config->gpgpu_ctx->func_sim->ptx_get_insn_str(pc)
               .c_str());
       if (pI) {
         assert(valid);
         if (pc != pI->pc) {
           SCHED_DPRINTF(
-              "Warp (warp_id %u, dynamic_warp_id %u) control hazard "
+              "Warp (warp_id %u, dynamic_warp_id %u, cta_id %u) control hazard "
               "instruction flush\n",
-              (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id());
+              (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
+              (*iter)->get_cta_id());
           // control hazard
           warp(warp_id).set_next_pc(pc);
           warp(warp_id).ibuffer_flush();
@@ -1328,8 +1333,9 @@ void scheduler_unit::cycle() {
           valid_inst = true;
           if (!m_scoreboard->checkCollision(warp_id, pI)) {
             SCHED_DPRINTF(
-                "Warp (warp_id %u, dynamic_warp_id %u) passes scoreboard\n",
-                (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id());
+                "Warp (warp_id %u, dynamic_warp_id %u, cta_id %u) passes scoreboard\n",
+                (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
+                (*iter)->get_cta_id());
             ready_inst = true;
 
             const active_mask_t &active_mask =
@@ -1504,23 +1510,26 @@ void scheduler_unit::cycle() {
             }  // end of else
           } else {
             SCHED_DPRINTF(
-                "Warp (warp_id %u, dynamic_warp_id %u) fails scoreboard\n",
-                (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id());
+                "Warp (warp_id %u, dynamic_warp_id %u, cta_id %u) fails scoreboard\n",
+                (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
+                (*iter)->get_cta_id());
           }
         }
       } else if (valid) {
         // this case can happen after a return instruction in diverged warp
         SCHED_DPRINTF(
-            "Warp (warp_id %u, dynamic_warp_id %u) return from diverged warp "
+            "Warp (warp_id %u, dynamic_warp_id %u, cta_id %u) return from diverged warp "
             "flush\n",
-            (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id());
+            (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
+            (*iter)->get_cta_id());
         warp(warp_id).set_next_pc(pc);
         warp(warp_id).ibuffer_flush();
       }
       if (warp_inst_issued) {
         SCHED_DPRINTF(
-            "Warp (warp_id %u, dynamic_warp_id %u) issued %u instructions\n",
-            (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(), issued);
+            "Warp (warp_id %u, dynamic_warp_id %u, cta_id %u) issued %u instructions\n",
+            (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
+            (*iter)->get_cta_id(), issued);
         do_on_warp_issued(warp_id, issued, iter);
       }
       checked++;
@@ -1629,7 +1638,8 @@ void two_level_active_scheduler::order_warps() {
   for (std::vector<shd_warp_t *>::iterator iter =
            m_next_cycle_prioritized_warps.begin();
        iter != m_next_cycle_prioritized_warps.end();) {
-    bool waiting = (*iter)->waiting();
+    shd_warp_t::WaitingReason reason;
+    bool waiting = (*iter)->waiting(&reason);
     for (int i = 0; i < MAX_INPUT_VALUES; i++) {
       const warp_inst_t *inst = (*iter)->ibuffer_next_inst();
       // Is the instruction waiting on a long operation?
@@ -1639,11 +1649,17 @@ void two_level_active_scheduler::order_warps() {
       }
     }
 
-    if (allow_demotion && waiting) {
+    if ((allow_demotion && waiting) 
+        || (!allow_demotion && (reason == shd_warp_t::FUNCTIONAL_DONE
+            || reason == shd_warp_t::AT_BARRIER
+            || reason == shd_warp_t::AT_MEM_BARRIER
+            || reason == shd_warp_t::WAITING_ATOMIC_OP
+            || reason == shd_warp_t::WAITING_LDGSTS))) {
       m_pending_warps.push_back(*iter);
       iter = m_next_cycle_prioritized_warps.erase(iter);
-      SCHED_DPRINTF("DEMOTED warp_id=%d, dynamic_warp_id=%d\n",
-                    (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id());
+      SCHED_DPRINTF("DEMOTED warp_id=%d, dynamic_warp_id=%d, cta_id=%u\n",
+                    (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
+                    (*iter)->get_cta_id());
       ++num_demoted;
     } else {
       ++iter;
@@ -1658,9 +1674,10 @@ void two_level_active_scheduler::order_warps() {
       m_next_cycle_prioritized_warps.push_back(m_pending_warps.front());
       m_pending_warps.pop_front();
       SCHED_DPRINTF(
-          "PROMOTED warp_id=%d, dynamic_warp_id=%d\n",
+          "PROMOTED warp_id=%d, dynamic_warp_id=%d, cta_id=%u\n",
           (m_next_cycle_prioritized_warps.back())->get_warp_id(),
-          (m_next_cycle_prioritized_warps.back())->get_dynamic_warp_id());
+          (m_next_cycle_prioritized_warps.back())->get_dynamic_warp_id(),
+          (m_next_cycle_prioritized_warps.back())->get_cta_id());
       ++num_promoted;
     }
   } else {
@@ -4048,14 +4065,22 @@ bool shd_warp_t::hardware_done() const {
 }
 
 bool shd_warp_t::waiting() {
+  WaitingReason _temp_reason;
+  return waiting(&_temp_reason);
+}
+
+bool shd_warp_t::waiting(shd_warp_t::WaitingReason *reason) {
   if (functional_done()) {
     // waiting to be initialized with a kernel
+    *reason = FUNCTIONAL_DONE;
     return true;
   } else if (m_shader->warp_waiting_at_barrier(m_warp_id)) {
     // waiting for other warps in CTA to reach barrier
+    *reason = AT_BARRIER;
     return true;
   } else if (m_shader->warp_waiting_at_mem_barrier(m_warp_id)) {
     // waiting for memory barrier
+    *reason = AT_MEM_BARRIER;
     return true;
   } else if (m_n_atomic > 0) {
     // waiting for atomic operation to complete at memory:
@@ -4063,10 +4088,13 @@ bool shd_warp_t::waiting() {
     // stall here since if a call/return instruction occurs in the meantime
     // the functional execution of the atomic when it hits DRAM can cause
     // the wrong register to be read.
+    *reason = WAITING_ATOMIC_OP;
     return true;
   } else if (m_waiting_ldgsts) {  // Waiting for LDGSTS to finish
+    *reason = WAITING_LDGSTS;
     return true;
   }
+  *reason = NOT_WAITING;
   return false;
 }
 

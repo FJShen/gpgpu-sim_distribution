@@ -101,6 +101,17 @@ class thread_ctx_t {
 
 class shd_warp_t {
  public:
+  enum WaitingReason{
+    NOT_WAITING=0,
+    FUNCTIONAL_DONE,
+    AT_BARRIER,
+    AT_MEM_BARRIER,
+    WAITING_ATOMIC_OP, // waiting for atomic operation to complete at memory
+    WAITING_LDGSTS,
+    _NUM_WAITING_REASONS
+  };
+
+ public:
   shd_warp_t(class shader_core_ctx *shader, unsigned warp_size)
       : m_shader(shader), m_warp_size(warp_size) {
     m_stores_outstanding = 0;
@@ -172,6 +183,7 @@ class shd_warp_t {
 
   bool functional_done() const;
   bool waiting();  // not const due to membar
+  bool waiting(shd_warp_t::WaitingReason *reason); // gives more precise reason of waiting
   bool hardware_done() const;
 
   bool done_exit() const { return m_done_exit; }
